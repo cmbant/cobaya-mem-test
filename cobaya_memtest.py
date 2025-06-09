@@ -10,14 +10,18 @@ Cobaya Memory Leak Testing - Complete Workflow
 This script provides a complete workflow for Cobaya memory leak testing:
 1. Automatically build Docker image if needed
 2. Run Cobaya with heaptrack profiling
-3. Analyze the results and generate reports
-4. Test environment setup
+3. Run Python test files with heaptrack profiling
+4. Compile and run Fortran tests with heaptrack profiling
+5. Analyze the results and generate reports
+6. Test environment setup
 
 Usage: python cobaya_memtest.py <yaml_file> [options]
        uv run cobaya_memtest.py <yaml_file> [options]
 
 Examples:
-  python cobaya_memtest.py mem-leak.yaml                    # Full workflow
+  python cobaya_memtest.py mem-leak.yaml                    # Full Cobaya workflow
+  python cobaya_memtest.py --test-python test_camb.py       # Test Python file
+  python cobaya_memtest.py --test-fortran test_prog.f90     # Test Fortran file
   python cobaya_memtest.py --build-only                     # Just build image
   python cobaya_memtest.py --test-environment               # Test environment
   python cobaya_memtest.py mem-leak.yaml --force-rebuild    # Rebuild image first
@@ -156,6 +160,77 @@ def run_cobaya_with_heaptrack(yaml_file, container_name):
     return expected_file
 
 
+def run_python_test_with_heaptrack(test_file, container_name):
+    """Run Python test file with heaptrack profiling."""
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f"heaptrack_python_{timestamp}.gz"
+
+    print(f"Running Python test file '{test_file}' with heaptrack...")
+    print("This may take several minutes depending on the test...")
+
+    # Use the working Docker command format
+    docker_cmd = f"""docker run --rm -v "{os.getcwd()}:/workspace" -w /workspace {container_name} bash -c "export PYTHONPATH=/opt/cobaya-packages/code/CAMB:$PYTHONPATH && export COBAYA_PACKAGES_PATH=/opt/cobaya-packages && heaptrack --output {output_file} python {test_file}" """
+
+    print("Running command...")
+    try:
+        run_command(docker_cmd, capture_output=False)
+    except subprocess.CalledProcessError as e:
+        print(f"Docker command failed with return code {e.returncode}")
+        raise
+
+    # heaptrack automatically adds .gz extension
+    expected_file = f"{output_file}.gz"
+    if not os.path.exists(expected_file):
+        raise FileNotFoundError(f"Heaptrack output file not found: {expected_file}")
+
+    print(f"✓ Heaptrack data saved to: {expected_file}")
+    return expected_file
+
+
+def compile_fortran_test(fortran_file, container_name, compile_only=False):
+    """Compile Fortran test file and optionally run with heaptrack."""
+    # Extract base name for executable
+    base_name = os.path.splitext(os.path.basename(fortran_file))[0]
+    executable = f"{base_name}_test"
+
+    print(f"Compiling Fortran file '{fortran_file}'...")
+
+    # Compile the Fortran file
+    compile_cmd = f"""docker run --rm -v "{os.getcwd()}:/workspace" -w /workspace {container_name} bash -c "gfortran -g -O0 -o {executable} {fortran_file}" """
+
+    try:
+        run_command(compile_cmd, capture_output=False)
+        print(f"✓ Fortran file compiled successfully: {executable}")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Compilation failed with return code {e.returncode}")
+        raise
+
+    if compile_only:
+        return executable
+
+    # Run with heaptrack
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f"heaptrack_fortran_{timestamp}.gz"
+
+    print(f"Running Fortran executable '{executable}' with heaptrack...")
+
+    run_cmd = f"""docker run --rm -v "{os.getcwd()}:/workspace" -w /workspace {container_name} bash -c "heaptrack --output {output_file} ./{executable}" """
+
+    try:
+        run_command(run_cmd, capture_output=False)
+    except subprocess.CalledProcessError as e:
+        print(f"Docker command failed with return code {e.returncode}")
+        raise
+
+    # heaptrack automatically adds .gz extension
+    expected_file = f"{output_file}.gz"
+    if not os.path.exists(expected_file):
+        raise FileNotFoundError(f"Heaptrack output file not found: {expected_file}")
+
+    print(f"✓ Heaptrack data saved to: {expected_file}")
+    return expected_file
+
+
 def analyze_heaptrack_data(heaptrack_file, container_name):
     """Analyze heaptrack data using the leak_summary.py script."""
     print(f"\nAnalyzing heaptrack data: {heaptrack_file}")
@@ -215,7 +290,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s mem-leak.yaml                    # Full workflow
+  %(prog)s mem-leak.yaml                    # Full Cobaya workflow
+  %(prog)s --test-python test_camb.py       # Test Python file
+  %(prog)s --test-fortran test_prog.f90     # Test Fortran file
+  %(prog)s --compile-only test_prog.f90     # Just compile Fortran
   %(prog)s --build-only                     # Just build image
   %(prog)s --test-environment               # Test environment
   %(prog)s mem-leak.yaml --force-rebuild    # Rebuild image first
@@ -227,6 +305,12 @@ Examples:
                        help="Docker container name (default: from config)")
     parser.add_argument("--config", default="docker-config.yaml",
                        help="Configuration file (default: docker-config.yaml)")
+    parser.add_argument("--test-python",
+                       help="Run Python test file with heaptrack profiling")
+    parser.add_argument("--test-fortran",
+                       help="Compile and run Fortran test file with heaptrack profiling")
+    parser.add_argument("--compile-only",
+                       help="Only compile Fortran file (don't run with heaptrack)")
     parser.add_argument("--analyze-only",
                        help="Only analyze existing heaptrack file (skip Cobaya run)")
     parser.add_argument("--build-only", action="store_true",
@@ -273,50 +357,111 @@ Examples:
             sys.exit(1)
         return
 
-    # For other operations, we need a yaml file
-    if not args.yaml_file and not args.analyze_only:
-        print("Error: YAML file required for running Cobaya tests.")
+    # Handle compile-only option
+    if args.compile_only:
+        if not os.path.exists(args.compile_only):
+            print(f"Error: Fortran file '{args.compile_only}' not found!")
+            sys.exit(1)
+
+        # Build image if it doesn't exist
+        if not check_docker_image(container_name):
+            print(f"Docker image '{container_name}' not found. Building...")
+            if not build_docker_image(container_name, config):
+                print("❌ Failed to build Docker image!")
+                sys.exit(1)
+
+        try:
+            executable = compile_fortran_test(args.compile_only, container_name, compile_only=True)
+            print(f"✓ Compilation completed successfully: {executable}")
+        except Exception as e:
+            print(f"❌ Compilation failed: {e}")
+            sys.exit(1)
+        return
+
+    # For other operations, we need a file
+    if not args.yaml_file and not args.analyze_only and not args.test_python and not args.test_fortran:
+        print("Error: Input file required (YAML for Cobaya, Python test file, or Fortran test file).")
         print("Use --help for usage information.")
         sys.exit(1)
 
-    yaml_file = args.yaml_file
+    # Build Docker image if needed (for all operations except analyze-only)
+    if not args.analyze_only:
+        if not check_docker_image(container_name):
+            print(f"Docker image '{container_name}' not found. Building...")
+            if not build_docker_image(container_name, config):
+                print("❌ Failed to build Docker image!")
+                sys.exit(1)
+        elif args.force_rebuild:
+            print("Force rebuilding Docker image...")
+            if not build_docker_image(container_name, config, force_rebuild=True):
+                print("❌ Failed to rebuild Docker image!")
+                sys.exit(1)
 
-    # Build Docker image if needed
-    if not check_docker_image(container_name):
-        print(f"Docker image '{container_name}' not found. Building...")
-        if not build_docker_image(container_name, config):
-            print("❌ Failed to build Docker image!")
-            sys.exit(1)
-    elif args.force_rebuild:
-        print("Force rebuilding Docker image...")
-        if not build_docker_image(container_name, config, force_rebuild=True):
-            print("❌ Failed to rebuild Docker image!")
-            sys.exit(1)
-    
     try:
         if args.analyze_only:
             # Only analyze existing file
             if not os.path.exists(args.analyze_only):
                 print(f"Error: Heaptrack file '{args.analyze_only}' not found!")
                 sys.exit(1)
-            
+
             print(f"Analyzing existing heaptrack file: {args.analyze_only}")
             success = analyze_heaptrack_data(args.analyze_only, container_name)
-            
+
+        elif args.test_python:
+            # Test Python file workflow
+            if not os.path.exists(args.test_python):
+                print(f"Error: Python test file '{args.test_python}' not found!")
+                sys.exit(1)
+
+            print(f"Input file: {args.test_python}")
+
+            # Step 1: Run Python test with heaptrack
+            print("\n" + "="*50)
+            print("STEP 1: Running Python test with heaptrack")
+            print("="*50)
+            heaptrack_file = run_python_test_with_heaptrack(args.test_python, container_name)
+
+            # Step 2: Analyze results
+            print("\n" + "="*50)
+            print("STEP 2: Analyzing heaptrack data")
+            print("="*50)
+            success = analyze_heaptrack_data(heaptrack_file, container_name)
+
+        elif args.test_fortran:
+            # Test Fortran file workflow
+            if not os.path.exists(args.test_fortran):
+                print(f"Error: Fortran test file '{args.test_fortran}' not found!")
+                sys.exit(1)
+
+            print(f"Input file: {args.test_fortran}")
+
+            # Step 1: Compile and run Fortran test with heaptrack
+            print("\n" + "="*50)
+            print("STEP 1: Compiling and running Fortran test with heaptrack")
+            print("="*50)
+            heaptrack_file = compile_fortran_test(args.test_fortran, container_name)
+
+            # Step 2: Analyze results
+            print("\n" + "="*50)
+            print("STEP 2: Analyzing heaptrack data")
+            print("="*50)
+            success = analyze_heaptrack_data(heaptrack_file, container_name)
+
         else:
-            # Full workflow: run Cobaya then analyze
+            # Full Cobaya workflow: run Cobaya then analyze
+            yaml_file = args.yaml_file
             if not os.path.exists(yaml_file):
                 print(f"Error: YAML file '{yaml_file}' not found!")
                 sys.exit(1)
-            
+
             print(f"Input file: {yaml_file}")
-            
+
             # Step 1: Run Cobaya with heaptrack
             print("\n" + "="*50)
             print("STEP 1: Running Cobaya with heaptrack")
             print("="*50)
             heaptrack_file = run_cobaya_with_heaptrack(yaml_file, container_name)
-            
+
             # Step 2: Analyze results
             print("\n" + "="*50)
             print("STEP 2: Analyzing heaptrack data")

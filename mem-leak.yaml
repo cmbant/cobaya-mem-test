@@ -92,7 +92,7 @@ sampler:
   mcmc:
     drag: False
     covmat: auto
-    max_samples: 40  
+    max_samples: 40
     measure_speeds: True
 output:
   chains/powerleak

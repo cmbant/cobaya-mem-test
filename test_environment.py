@@ -83,6 +83,13 @@ def test_environment_in_container(container_name):
         print("Available memory profiling commands:")
         print("  valgrind --tool=memcheck --leak-check=full python -m cobaya run mem-leak.yaml")
         print("  heaptrack python -m cobaya run mem-leak.yaml")
+        print("  heaptrack python test_camb_example.py")
+        print("  gfortran -g -O0 -o test_prog test_fortran_example.f90 && heaptrack ./test_prog")
+        print()
+        print("Available test workflows:")
+        print("  uv run cobaya_memtest.py mem-leak.yaml          # Cobaya workflow")
+        print("  uv run cobaya_memtest.py --test-python test.py  # Python test")
+        print("  uv run cobaya_memtest.py --test-fortran test.f90 # Fortran test")
         print("=" * 60)
         print("✓ Environment test completed successfully!")
         return True

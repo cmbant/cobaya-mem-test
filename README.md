@@ -75,8 +75,10 @@ The script creates a detailed report (`leak_summary_TIMESTAMP.txt`) with:
 
 - **Overall statistics**: Total allocations, peak memory, total leaks
 - **Top memory leaks**: Sorted by size with leak count and function names
+- **Detailed stack traces**: Complete call stacks for the top 5 memory leaks
 - **CAMBLIB.SO specific leaks**: Fortran-related leaks separated from Python
-- **Specific functions**: Analysis of known problematic functions
+- **Specific functions**: Analysis of known problematic functions with stack traces
+- **Console summary**: Shows stack trace for the largest leak in terminal output
 
 ## Configuration
 
@@ -116,8 +118,9 @@ docker build -t cobaya-memtest \
 - **Force rebuild**: Option to rebuild when configuration changes
 - **Environment testing**: Built-in environment validation
 - **Actual leak focus**: Reports leak count, size, and function names (not just allocations)
-- **CAMBLIB.SO analysis**: Identifies Fortran memory leaks in CAMB
-- **Clean reporting**: Easy-to-read summaries with key findings
+- **Stack trace analysis**: Complete call stacks for top leaks showing exact code paths
+- **CAMBLIB.SO analysis**: Identifies Fortran memory leaks in CAMB with detailed traces
+- **Clean reporting**: Easy-to-read summaries with key findings and stack traces
 - **Cross-platform**: Works on Windows, Linux, macOS
 
 ## Advanced Usage
