@@ -1,0 +1,76 @@
+# Docker Configuration for Cobaya Memory Testing
+# 
+# This file contains default build arguments and settings for the Docker image.
+# You can modify these values to customize the build environment.
+
+# Docker image settings
+image_name: "cobaya-memtest"
+dockerfile: "Dockerfile"
+
+# Build arguments - these will be passed to docker build
+build_args:
+  # Ubuntu version (20.04, 22.04, 24.04)
+  UBUNTU_VERSION: "22.04"
+  
+  # Python version (3.10, 3.11, 3.12)
+  PYTHON_VERSION: "3.10"
+  
+  # GCC version (11, 12, 13)
+  GCC_VERSION: "12"
+
+# Docker build options
+build_options:
+  # Use BuildKit for better performance
+  buildkit: true
+  
+  # Number of parallel jobs for building (auto-detect if null)
+  parallel_jobs: null
+  
+  # Pull latest base image before building
+  pull: true
+  
+  # Remove intermediate containers after build
+  rm: true
+
+# Runtime settings
+runtime:
+  # Default working directory in container
+  workdir: "/workspace"
+  
+  # Default environment variables
+  environment:
+    COBAYA_PACKAGES_PATH: "/opt/cobaya-packages"
+    OMP_NUM_THREADS: "1"
+  
+  # Default volume mounts (host:container)
+  volumes:
+    - ".:/workspace"
+
+# Memory testing settings
+memory_testing:
+  # Default tools to use
+  default_tools:
+    - "valgrind"
+    - "heaptrack"
+  
+  # Default valgrind options
+  valgrind_options:
+    - "--tool=memcheck"
+    - "--leak-check=full"
+    - "--show-leak-kinds=all"
+    - "--track-origins=yes"
+  
+  # Default heaptrack options
+  heaptrack_options:
+    - "--output"  # Output file will be added automatically
+
+# Cobaya settings
+cobaya:
+  # Default packages path
+  packages_path: "/opt/cobaya-packages"
+  
+  # Default test configuration
+  test_config: "mem-leak.yaml"
+  
+  # Default output directory
+  output_dir: "chains"

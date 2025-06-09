@@ -2,15 +2,10 @@ debug: false
 
 theory:
   camb:
-    use_renames: true
     extra_args:
-      initial_power_model: InitialPowerLaw
       lens_potential_accuracy: 0
       num_massive_neutrinos: 0
-      nnu: 3.044
-      theta_H0_range:
-      - 40
-      - 100
+      mnu: 0
       nt: null
 
 likelihood:
@@ -63,10 +58,6 @@ params:
   cosmomc_theta:
     value: 'lambda theta_MC_100: 1.e-2*theta_MC_100'
     derived: false
-  H0:
-    latex: H_0
-    min: 40
-    max: 100
   ombh2:
     prior:
       min: 0.005
@@ -87,21 +78,6 @@ params:
       scale: 0.001
     proposal: 0.0005
     latex: \Omega_\mathrm{c} h^2
-  omegam:
-    latex: \Omega_\mathrm{m}
-  omegamh2:
-    derived: 'lambda omegam, H0: omegam*(H0/100)**2'
-    latex: \Omega_\mathrm{m} h^2
-  mnu: 0.0
-  omega_de:
-    latex: \Omega_\Lambda
-  YHe:
-    latex: Y_\mathrm{P}
-  Y_p:
-    latex: Y_P^\mathrm{BBN}
-  DHBBN:
-    derived: 'lambda DH: 10**5*DH'
-    latex: 10^5 \mathrm{D}/\mathrm{H}
   tau:
     prior:
       min: 0.01
@@ -112,41 +88,11 @@ params:
       scale: 0.006
     proposal: 0.003
     latex: \tau_\mathrm{reio}
-  zrei:
-    latex: z_\mathrm{re}
-  A:
-    derived: 'lambda As: 1e9*As'
-    latex: 10^9 A_\mathrm{s}
-  clamp:
-    derived: 'lambda As, tau: 1e9*As*np.exp(-2*tau)'
-    latex: 10^9 A_\mathrm{s} e^{-2\tau}
-  age:
-    latex: '{\rm{Age}}/\mathrm{Gyr}'
-  rdrag:
-    latex: r_\mathrm{drag}
 sampler:
   mcmc:
     drag: False
-    proposal_scale: 1.9
     covmat: auto
-
-    learn_every: 40d
-    learn_proposal: True
-    learn_proposal_Rminus1_max: 2.
-    learn_proposal_Rminus1_max_early: 30.
-    learn_proposal_Rminus1_min: 0.2
-
-    max_samples: 40
-    
-    Rminus1_stop: 0.001
-    Rminus1_cl_stop: 0.2
-    Rminus1_cl_level: 0.95
-    Rminus1_single_split: 4
-
+    max_samples: 40  
     measure_speeds: True
-
-    oversample_power: 0.4
-    oversample_thin: False
-
 output:
   chains/powerleak

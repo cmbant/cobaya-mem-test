@@ -5,23 +5,51 @@ Docker environment for detecting and analyzing memory leaks in Cobaya runs, with
 ## Quick Start
 
 ```bash
-# 1. Build the Docker image
-docker build -t cobaya-memtest .
-
-# 2. Run memory leak analysis on your YAML file
+# Automatic workflow - builds image if needed
 uv run cobaya_memtest.py mem-leak.yaml
 ```
 
-## Main Command
+## Commands
 
+### Full Workflow
 ```bash
 uv run cobaya_memtest.py your-config.yaml
 ```
-
 This command will:
-1. Run Cobaya with heaptrack memory profiling
-2. Generate a clean leak summary report
-3. Show key findings with leak sizes and function names
+1. Automatically build Docker image if it doesn't exist
+2. Run Cobaya with heaptrack memory profiling
+3. Generate a clean leak summary report
+4. Show key findings with leak sizes and function names
+
+### Build Management
+```bash
+# Build image only
+uv run cobaya_memtest.py --build-only
+
+# Force rebuild (useful when config changes)
+uv run cobaya_memtest.py --force-rebuild mem-leak.yaml
+
+# Test environment setup (shows versions and validates installation)
+uv run cobaya_memtest.py --test-environment
+```
+
+### Environment Testing Output
+The `--test-environment` option provides detailed information:
+```
+Python version: Python 3.10.12
+GCC version: gcc (Ubuntu 12.3.0-1ubuntu1~22.04) 12.3.0
+Gfortran version: GNU Fortran (Ubuntu 12.3.0-1ubuntu1~22.04) 12.3.0
+Valgrind version: valgrind-3.18.1
+Cobaya version: 3.5.7
+✓ Cobaya import successful
+Environment variables: COBAYA_PACKAGES_PATH, OMP_NUM_THREADS
+```
+
+### Analysis Only
+```bash
+# Analyze existing heaptrack file
+uv run cobaya_memtest.py --analyze-only heaptrack_file.gz.gz
+```
 
 ## Example Output
 
@@ -50,26 +78,55 @@ The script creates a detailed report (`leak_summary_TIMESTAMP.txt`) with:
 - **CAMBLIB.SO specific leaks**: Fortran-related leaks separated from Python
 - **Specific functions**: Analysis of known problematic functions
 
-## Additional Commands
+## Configuration
 
+The Docker image can be customized via `docker-config.yaml`:
+
+```yaml
+# Docker image settings
+image_name: "cobaya-memtest"
+
+# Build arguments - customize versions
+build_args:
+  UBUNTU_VERSION: "22.04"    # 20.04, 22.04, 24.04
+  PYTHON_VERSION: "3.10"     # 3.10, 3.11, 3.12
+  GCC_VERSION: "12"          # 11, 12, 13
+```
+
+### Manual Docker Build (Advanced)
 ```bash
-# Analyze existing heaptrack file
-uv run leak_summary.py heaptrack_file.gz.gz
-
-# Analyze existing data without re-running Cobaya
-uv run cobaya_memtest.py --analyze-only heaptrack_file.gz.gz your-config.yaml
+# Custom versions
+docker build -t cobaya-memtest \
+  --build-arg PYTHON_VERSION=3.11 \
+  --build-arg GCC_VERSION=13 .
 ```
 
 ## Environment
 
-- **Ubuntu 22.04** with GCC 12.3.0, gfortran, Python 3.10
+- **Configurable versions**: Ubuntu (20.04/22.04/24.04), Python (3.10/3.11/3.12), GCC (11/12/13)
+- **Default**: Ubuntu 22.04, Python 3.10, GCC 12.3.0 with gfortran
 - **Cobaya** with CAMB and Planck 2018 data pre-installed
-- **Heaptrack** for memory profiling
+- **Memory tools**: Valgrind and Heaptrack for comprehensive profiling
 - **Cross-platform** via Docker and `uv run`
 
 ## Key Features
 
+- **Auto-build**: Automatically builds Docker image if missing
+- **Persistent images**: Images are not deleted between runs for efficiency
+- **Force rebuild**: Option to rebuild when configuration changes
+- **Environment testing**: Built-in environment validation
 - **Actual leak focus**: Reports leak count, size, and function names (not just allocations)
 - **CAMBLIB.SO analysis**: Identifies Fortran memory leaks in CAMB
 - **Clean reporting**: Easy-to-read summaries with key findings
 - **Cross-platform**: Works on Windows, Linux, macOS
+
+## Advanced Usage
+
+### Direct Analysis Scripts
+```bash
+# Direct heaptrack analysis
+uv run leak_summary.py heaptrack_file.gz.gz
+
+# Environment testing only
+uv run test_environment.py --container cobaya-memtest
+```

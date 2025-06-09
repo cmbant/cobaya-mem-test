@@ -1,15 +1,27 @@
 # Cobaya Memory Leak Testing Docker Image
 # This image provides a complete environment for running Cobaya with memory profiling tools
-# 
+#
+# Build arguments for customization:
+#   --build-arg PYTHON_VERSION=3.10    (Python version: 3.10, 3.11, 3.12)
+#   --build-arg GCC_VERSION=12         (GCC version: 11, 12, 13)
+#   --build-arg UBUNTU_VERSION=22.04   (Ubuntu version: 20.04, 22.04, 24.04)
+#
 # Usage:
 #   docker build -t cobaya-memtest .
+#   docker build -t cobaya-memtest --build-arg PYTHON_VERSION=3.11 --build-arg GCC_VERSION=13 .
 #   docker run -it --rm -v $(pwd):/workspace cobaya-memtest
 #
 # Memory profiling examples:
 #   valgrind --tool=memcheck --leak-check=full python -m cobaya run mem-leak.yaml
 #   heaptrack python -m cobaya run mem-leak.yaml
 
-FROM ubuntu:22.04
+# Build arguments with defaults
+ARG UBUNTU_VERSION=22.04
+FROM ubuntu:${UBUNTU_VERSION}
+
+# Re-declare build arguments after FROM (required for multi-stage builds)
+ARG PYTHON_VERSION=3.10
+ARG GCC_VERSION=12
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -19,13 +31,13 @@ ENV TZ=UTC
 RUN apt-get update && apt-get install -y \
     # Build tools and compilers
     build-essential \
-    gcc-12 \
-    gfortran-12 \
-    g++-12 \
-    # Python 3.10 and development tools
-    python3.10 \
-    python3.10-dev \
-    python3.10-venv \
+    gcc-${GCC_VERSION} \
+    gfortran-${GCC_VERSION} \
+    g++-${GCC_VERSION} \
+    # Python and development tools
+    python${PYTHON_VERSION} \
+    python${PYTHON_VERSION}-dev \
+    python${PYTHON_VERSION}-venv \
     python3-pip \
     # Version control and utilities
     git \
@@ -38,10 +50,10 @@ RUN apt-get update && apt-get install -y \
     htop \
     && rm -rf /var/lib/apt/lists/*
 
-# Set gcc-12 as default
-RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 \
-    && update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-12 100 \
-    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+# Set compiler versions as default
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${GCC_VERSION} 100 \
+    && update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-${GCC_VERSION} 100 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-${GCC_VERSION} 100
 
 # Install heaptrack dependencies
 RUN apt-get update && apt-get install -y \
@@ -72,9 +84,9 @@ RUN cd /tmp \
     && cd / \
     && rm -rf /tmp/heaptrack
 
-# Ensure python3.10 is the default python3
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 100 \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.10 100
+# Ensure specified Python version is the default python3
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 100 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 100
 
 # Upgrade pip and install Python packages
 RUN python -m pip install --upgrade pip setuptools wheel
@@ -96,29 +108,7 @@ RUN cobaya-install mem-leak.yaml --packages-path /opt/cobaya-packages
 ENV COBAYA_PACKAGES_PATH=/opt/cobaya-packages
 ENV OMP_NUM_THREADS=1
 
-# Create a test script
-RUN echo '#!/bin/bash\n\
-echo "=== Cobaya Memory Leak Testing Environment ==="\n\
-echo ""\n\
-echo "Installed tools:"\n\
-echo "- Python: $(python --version)"\n\
-echo "- GCC: $(gcc --version | head -1)"\n\
-echo "- Gfortran: $(gfortran --version | head -1)"\n\
-echo "- Valgrind: $(valgrind --version)"\n\
-echo "- Heaptrack: $(heaptrack --version 2>/dev/null || echo \"heaptrack installed\")"\n\
-\n\
-echo "- Cobaya: $(python -c \"import cobaya; print(cobaya.__version__)\")"\n\
-echo ""\n\
-echo "Testing cobaya installation..."\n\
-python -c "import cobaya; print(\"Cobaya import successful\")" || echo "Cobaya import failed"\n\
-echo ""\n\
-echo "Available memory profiling commands:"\n\
-echo "  valgrind --tool=memcheck --leak-check=full python -m cobaya run mem-leak.yaml"\n\
-echo "  heaptrack python -m cobaya run mem-leak.yaml"\n\
-echo ""\n\
-echo "Files in workspace:"\n\
-ls -la /workspace/\n\
-' > /usr/local/bin/test-environment && chmod +x /usr/local/bin/test-environment
+# Note: test-environment script is now handled by cobaya-memtest.py --test-environment
 
 # Default command
 CMD ["/bin/bash"]
