@@ -106,7 +106,7 @@ echo "- GCC: $(gcc --version | head -1)"\n\
 echo "- Gfortran: $(gfortran --version | head -1)"\n\
 echo "- Valgrind: $(valgrind --version)"\n\
 echo "- Heaptrack: $(heaptrack --version 2>/dev/null || echo \"heaptrack installed\")"\n\
-
+\n\
 echo "- Cobaya: $(python -c \"import cobaya; print(cobaya.__version__)\")"\n\
 echo ""\n\
 echo "Testing cobaya installation..."\n\
